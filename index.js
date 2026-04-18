@@ -12,12 +12,12 @@ import studyGuideRouter from './routes/studyGuide.routes.js';
 import { errorHandler } from './middlewares/error.middleware.js';
 
 const app = express();
-const PORT = process.env.PORT || 4000;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env') });
 
+const PORT = process.env.PORT;
 connectDB(process.env.MONGODB_URL).then(() => console.log('Database connected'));
 
 app.use(cors({
