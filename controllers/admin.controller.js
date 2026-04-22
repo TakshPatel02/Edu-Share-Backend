@@ -1,10 +1,24 @@
 import { Material } from '../models/material.model.js';
 import { resolveFileInfo, validateMaterialPayload } from './material.controller.js';
+import { buildPdfViewUrl } from '../utils/cloudinary.js';
 
 const toError = (message, statusCode = 400) => {
     const error = new Error(message);
     error.statusCode = statusCode;
     return error;
+};
+
+const withPdfViewUrl = (materialDoc) => {
+    const material = materialDoc?.toObject ? materialDoc.toObject() : materialDoc;
+
+    if (material?.type === 'PDF' && material?.fileId) {
+        return {
+            ...material,
+            fileUrl: buildPdfViewUrl(material.fileId),
+        };
+    }
+
+    return material;
 };
 
 export const getAdminMaterials = async (req, res, next) => {
@@ -22,7 +36,7 @@ export const getAdminMaterials = async (req, res, next) => {
         res.status(200).json({
             success: true,
             count: materials.length,
-            materials,
+            materials: materials.map(withPdfViewUrl),
         });
     } catch (err) {
         next(err);
@@ -46,7 +60,7 @@ export const approveMaterial = async (req, res, next) => {
         res.status(200).json({
             success: true,
             message: 'Material approved successfully',
-            material,
+            material: withPdfViewUrl(material),
         });
     } catch (err) {
         next(err);
@@ -70,7 +84,7 @@ export const rejectMaterial = async (req, res, next) => {
         res.status(200).json({
             success: true,
             message: 'Material rejected successfully',
-            material,
+            material: withPdfViewUrl(material),
         });
     } catch (err) {
         next(err);
@@ -113,7 +127,7 @@ export const createAdminMaterial = async (req, res, next) => {
         res.status(201).json({
             success: true,
             message: 'Material uploaded and approved',
-            material,
+            material: withPdfViewUrl(material),
         });
     } catch (err) {
         next(err);

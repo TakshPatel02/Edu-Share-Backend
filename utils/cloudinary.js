@@ -45,13 +45,17 @@ const normalizePublicIdForPdf = (publicId = '') => {
     return publicId;
 };
 
-const buildDownloadUrl = (publicId) => {
+export const buildPdfViewUrl = (publicId) => {
+    configureCloudinary();
+
     const normalizedPublicId = normalizePublicIdForPdf(publicId);
 
-    return cloudinary.utils.private_download_url(normalizedPublicId, 'pdf', {
+    return cloudinary.url(normalizedPublicId, {
         resource_type: 'image',
         type: 'upload',
-        attachment: true,
+        format: 'pdf',
+        secure: true,
+        sign_url: false,
     });
 };
 
@@ -86,7 +90,7 @@ export const uploadPdfToCloudinary = async ({ buffer, filename }) => {
 
                 resolve({
                     fileId: result.public_id,
-                    fileUrl: buildDownloadUrl(result.public_id),
+                    fileUrl: buildPdfViewUrl(result.public_id),
                 });
             },
         );

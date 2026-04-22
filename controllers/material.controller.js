@@ -1,5 +1,5 @@
 import { Material } from '../models/material.model.js';
-import { uploadPdfToCloudinary } from '../utils/cloudinary.js';
+import { buildPdfViewUrl, uploadPdfToCloudinary } from '../utils/cloudinary.js';
 
 const BRANCHES = new Set(['IT', 'CE', 'CSE']);
 const CATEGORIES = new Set(['syllabus', 'papers', 'notes', 'playlists', 'solutions', 'books']);
@@ -76,6 +76,19 @@ const resolveFileInfo = async ({ type, file, fileUrl }) => {
     };
 };
 
+const withPdfViewUrl = (materialDoc) => {
+    const material = materialDoc?.toObject ? materialDoc.toObject() : materialDoc;
+
+    if (material?.type === 'PDF' && material?.fileId) {
+        return {
+            ...material,
+            fileUrl: buildPdfViewUrl(material.fileId),
+        };
+    }
+
+    return material;
+};
+
 export const getMaterials = async (req, res, next) => {
     try {
         const { branch, semester, subject, category } = req.query;
@@ -105,7 +118,7 @@ export const getMaterials = async (req, res, next) => {
         res.status(200).json({
             success: true,
             count: materials.length,
-            materials,
+            materials: materials.map(withPdfViewUrl),
         });
     } catch (err) {
         next(err);
@@ -148,7 +161,7 @@ export const createMaterial = async (req, res, next) => {
         res.status(201).json({
             success: true,
             message: 'Material uploaded successfully and sent for approval',
-            material,
+            material: withPdfViewUrl(material),
         });
     } catch (err) {
         next(err);
