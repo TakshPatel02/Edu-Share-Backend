@@ -1,4 +1,6 @@
 import bcrypt from 'bcrypt';
+import { Material } from '../models/material.model.js';
+import { StudyPlan } from '../models/studyGuide.model.js';
 import { User } from '../models/user.model.js';
 import { generateToken } from '../utils/token.js';
 
@@ -124,6 +126,78 @@ export const me = async (req, res, next) => {
         res.status(200).json({
             success: true,
             user,
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const serializeStudyPlan = (planDoc) => {
+    const plan = planDoc?.toObject ? planDoc.toObject() : planDoc;
+
+    if (!plan) {
+        return null;
+    }
+
+    return {
+        id: plan._id,
+        subject: plan.subject,
+        branch: plan.branch || '',
+        semester: plan.semester || '',
+        learningGoal: plan.learningGoal,
+        examType: plan.examType,
+        chapters: plan.chapters || [],
+        prepWeeks: plan.prepWeeks,
+        summary: plan.summary,
+        roadmap: plan.roadmap || [],
+        dailyRoutine: plan.dailyRoutine || [],
+        tips: plan.tips || [],
+        videoPlan: plan.videoPlan || [],
+        status: plan.status,
+        resources: {
+            youtubePlaylist: plan.youtubePlaylist || '',
+            syllabusFileName: plan.syllabusFileName || null,
+            notesFileName: plan.notesFileName || null,
+        },
+        createdAt: plan.createdAt,
+        updatedAt: plan.updatedAt,
+    };
+};
+
+export const dashboard = async (req, res, next) => {
+    try {
+        const userId = req.user.id;
+        const materialFilter = { uploadedBy: userId, category: 'books' };
+
+        const [totalBooks, approvedBooks, rejectedBooks, pendingBooks, plans] =
+            await Promise.all([
+                Material.countDocuments(materialFilter),
+                Material.countDocuments({ ...materialFilter, status: 'approved' }),
+                Material.countDocuments({ ...materialFilter, status: 'rejected' }),
+                Material.countDocuments({ ...materialFilter, status: 'pending' }),
+                StudyPlan.find({ userId }).sort({ createdAt: -1 }),
+            ]);
+
+        res.status(200).json({
+            success: true,
+            dashboard: {
+                profile: {
+                    id: req.user.id,
+                    name: req.user.name,
+                    email: req.user.email,
+                    role: req.user.role,
+                },
+                books: {
+                    total: totalBooks,
+                    approved: approvedBooks,
+                    rejected: rejectedBooks,
+                    pending: pendingBooks,
+                },
+                studyPlans: {
+                    count: plans.length,
+                    plans: plans.map(serializeStudyPlan),
+                },
+            },
         });
     } catch (err) {
         next(err);
