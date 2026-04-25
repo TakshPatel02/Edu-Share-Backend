@@ -82,10 +82,13 @@ const isValidYoutubePlaylistUrl = (url) => {
 // Generate a study plan using Gemini API
 export const generatePlan = async (req, res) => {
     try {
-        const { subject, learningGoal, examType, youtubePlaylist } = req.body;
+        const { subject, learningGoal, examType, youtubePlaylist, branch, semester } = req.body;
         const chapters = normalizeChapters(req.body.chapters);
         const prepWeeks = Number(req.body.prepWeeks);
-        const syllabusText = await parseSyllabusPdfText(req.file);
+        const syllabusFile = req.files?.syllabusPdf?.[0] || req.file;
+        const notesFile = req.files?.notesPdf?.[0] || null;
+        const syllabusText = await parseSyllabusPdfText(syllabusFile);
+        const notesText = await parseSyllabusPdfText(notesFile);
 
         // Validate required fields
         if (!subject || chapters.length === 0 || !prepWeeks || Number.isNaN(prepWeeks)) {
@@ -95,7 +98,7 @@ export const generatePlan = async (req, res) => {
             });
         }
 
-        if (!req.file) {
+        if (!syllabusFile) {
             return res.status(400).json({
                 success: false,
                 message: 'Syllabus PDF is required. Upload it using syllabusPdf field.',
@@ -114,6 +117,8 @@ export const generatePlan = async (req, res) => {
 You are an expert academic advisor. Create a personalized study plan for the following:
 
 Subject: ${subject}
+Branch: ${branch || 'Not provided'}
+Semester: ${semester || 'Not provided'}
 Learning Goal: ${learningGoal}
 Exam Type: ${examType}
 Preparation Time: ${prepWeeks} week(s)
@@ -121,6 +126,9 @@ Chapters to Cover: ${chapters.join(', ')}
 YouTube Playlist: ${youtubePlaylist}
 Syllabus from PDF:
 ${syllabusText.slice(0, 12000) || 'Syllabus text could not be extracted from PDF.'}
+
+Notes from PDF (optional):
+${notesText.slice(0, 12000) || 'No notes PDF was uploaded or text could not be extracted.'}
 
 Generate a comprehensive study plan in JSON format with the following structure:
 {
@@ -210,7 +218,8 @@ Ensure all arrays have 4-7 items each. Return ONLY valid JSON, no markdown forma
                 videoPlan: Array.isArray(parsedPlan.videoPlan) ? parsedPlan.videoPlan : [],
                 resources: {
                     youtubePlaylist,
-                    syllabusFileName: req.file?.originalname || null,
+                    syllabusFileName: syllabusFile?.originalname || null,
+                    notesFileName: notesFile?.originalname || null,
                 },
             },
         });
