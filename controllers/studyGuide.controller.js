@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { PDFParse } from 'pdf-parse';
+import { StudyPlan } from '../models/studyGuide.model.js';
 
 const getAiClient = () => {
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -77,6 +78,93 @@ const isValidYoutubePlaylistUrl = (url) => {
     } catch (error) {
         return false;
     }
+};
+
+const toError = (message, statusCode = 400) => {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+};
+
+const getPlanPayloadFromDoc = (planDoc) => {
+    if (!planDoc) {
+        return null;
+    }
+
+    return {
+        id: planDoc._id,
+        subject: planDoc.subject,
+        branch: planDoc.branch || '',
+        semester: planDoc.semester || '',
+        learningGoal: planDoc.learningGoal,
+        examType: planDoc.examType,
+        chapters: planDoc.chapters || [],
+        prepWeeks: planDoc.prepWeeks,
+        summary: planDoc.summary,
+        roadmap: planDoc.roadmap || [],
+        dailyRoutine: planDoc.dailyRoutine || [],
+        tips: planDoc.tips || [],
+        videoPlan: planDoc.videoPlan || [],
+        status: planDoc.status,
+        resources: {
+            youtubePlaylist: planDoc.youtubePlaylist || '',
+            syllabusFileName: planDoc.syllabusFileName || null,
+            notesFileName: planDoc.notesFileName || null,
+        },
+        createdAt: planDoc.createdAt,
+        updatedAt: planDoc.updatedAt,
+    };
+};
+
+const getChatPrompt = ({ subject, question, context }) => {
+    return `
+You are a friendly and concise study assistant for engineering students.
+
+Subject: ${subject || 'Not provided'}
+Question: ${question}
+Context: ${context || 'None'}
+
+Provide:
+1) A direct answer in 4-8 lines.
+2) A short "Next steps" list with 3 bullet points.
+3) Keep language clear and practical.
+`;
+};
+
+const getChapterGuidancePrompt = ({ subject, chapterName, goal, examType }) => {
+    return `
+You are an expert tutor. Provide focused guidance for one chapter.
+
+Subject: ${subject || 'Not provided'}
+Chapter: ${chapterName}
+Goal: ${goal || 'Understand concepts'}
+Exam Type: ${examType || 'Not provided'}
+
+Return JSON with this shape only:
+{
+  "overview": "2-3 lines",
+  "mustKnowTopics": ["4-7 bullet items"],
+  "practicePlan": ["4-6 actionable tasks"],
+  "commonMistakes": ["3-5 pitfalls to avoid"]
+}
+`;
+};
+
+const getQuestionAnswerPrompt = ({ subject, question, difficulty }) => {
+    return `
+You are a subject expert helping a student.
+
+Subject: ${subject || 'Not provided'}
+Question: ${question}
+Difficulty: ${difficulty || 'medium'}
+
+Return JSON only:
+{
+  "answer": "clear explanation",
+  "keyPoints": ["3-6 key points"],
+  "quickRevision": "1 short recap paragraph"
+}
+`;
 };
 
 // Generate a study plan using Gemini API
@@ -200,22 +288,79 @@ Ensure all arrays have 4-7 items each. Return ONLY valid JSON, no markdown forma
                 ],
             };
 
+            const savedPlan = await StudyPlan.create({
+                subject,
+                branch: branch || '',
+                semester: semester ? Number(semester) : null,
+                learningGoal,
+                examType,
+                chapters,
+                prepWeeks,
+                summary: fallbackPlan.summary,
+                roadmap: fallbackPlan.roadmap,
+                dailyRoutine: fallbackPlan.dailyRoutine,
+                tips: fallbackPlan.tips,
+                videoPlan: fallbackPlan.videoPlan,
+                youtubePlaylist,
+                syllabusFileName: syllabusFile?.originalname || null,
+                notesFileName: notesFile?.originalname || null,
+                userId: req.user?.id || null,
+                status: 'active',
+            });
+
             return res.status(200).json({
                 success: true,
                 message: 'Study plan generated successfully',
-                data: fallbackPlan,
+                data: {
+                    ...fallbackPlan,
+                    id: savedPlan._id,
+                    resources: {
+                        youtubePlaylist,
+                        syllabusFileName: syllabusFile?.originalname || null,
+                        notesFileName: notesFile?.originalname || null,
+                    },
+                },
             });
         }
+
+        const resolvedPlan = {
+            summary: parsedPlan.summary,
+            roadmap: Array.isArray(parsedPlan.roadmap) ? parsedPlan.roadmap : [],
+            dailyRoutine: Array.isArray(parsedPlan.dailyRoutine) ? parsedPlan.dailyRoutine : [],
+            tips: Array.isArray(parsedPlan.tips) ? parsedPlan.tips : [],
+            videoPlan: Array.isArray(parsedPlan.videoPlan) ? parsedPlan.videoPlan : [],
+        };
+
+        const savedPlan = await StudyPlan.create({
+            subject,
+            branch: branch || '',
+            semester: semester ? Number(semester) : null,
+            learningGoal,
+            examType,
+            chapters,
+            prepWeeks,
+            summary: resolvedPlan.summary,
+            roadmap: resolvedPlan.roadmap,
+            dailyRoutine: resolvedPlan.dailyRoutine,
+            tips: resolvedPlan.tips,
+            videoPlan: resolvedPlan.videoPlan,
+            youtubePlaylist,
+            syllabusFileName: syllabusFile?.originalname || null,
+            notesFileName: notesFile?.originalname || null,
+            userId: req.user?.id || null,
+            status: 'active',
+        });
 
         return res.status(200).json({
             success: true,
             message: 'Study plan generated successfully',
             data: {
-                summary: parsedPlan.summary,
-                roadmap: Array.isArray(parsedPlan.roadmap) ? parsedPlan.roadmap : [],
-                dailyRoutine: Array.isArray(parsedPlan.dailyRoutine) ? parsedPlan.dailyRoutine : [],
-                tips: Array.isArray(parsedPlan.tips) ? parsedPlan.tips : [],
-                videoPlan: Array.isArray(parsedPlan.videoPlan) ? parsedPlan.videoPlan : [],
+                id: savedPlan._id,
+                summary: resolvedPlan.summary,
+                roadmap: resolvedPlan.roadmap,
+                dailyRoutine: resolvedPlan.dailyRoutine,
+                tips: resolvedPlan.tips,
+                videoPlan: resolvedPlan.videoPlan,
                 resources: {
                     youtubePlaylist,
                     syllabusFileName: syllabusFile?.originalname || null,
@@ -230,5 +375,201 @@ Ensure all arrays have 4-7 items each. Return ONLY valid JSON, no markdown forma
             message: 'Failed to generate study plan',
             error: error.message,
         });
+    }
+};
+
+export const chat = async (req, res, next) => {
+    try {
+        const { question, subject, context } = req.body;
+
+        if (!question || !String(question).trim()) {
+            throw toError('question is required', 400);
+        }
+
+        const ai = getAiClient();
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: getChatPrompt({ subject, question, context }),
+        });
+
+        const answer = (response.text || '').trim();
+
+        res.status(200).json({
+            success: true,
+            message: 'Chat response generated',
+            data: {
+                answer: answer || 'No response generated. Please try again.',
+            },
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const getChapterGuidance = async (req, res, next) => {
+    try {
+        const { chapterName, subject, goal, examType } = req.body;
+
+        if (!chapterName || !String(chapterName).trim()) {
+            throw toError('chapterName is required', 400);
+        }
+
+        const ai = getAiClient();
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: getChapterGuidancePrompt({ subject, chapterName, goal, examType }),
+        });
+
+        const responseText = response.text || '';
+        const parsed = parseGeminiResponse(responseText);
+
+        if (!parsed) {
+            return res.status(200).json({
+                success: true,
+                message: 'Chapter guidance generated',
+                data: {
+                    overview: `Focus on ${chapterName} by first building concept clarity and then moving to problems.`,
+                    mustKnowTopics: [
+                        `Core definitions and notation in ${chapterName}`,
+                        'Common exam-oriented problem patterns',
+                        'Short derivations and frequently tested results',
+                        'How this chapter connects to previous units',
+                    ],
+                    practicePlan: [
+                        'Read one concise concept source and make quick notes',
+                        'Solve 10-15 representative questions',
+                        'Review mistakes and retry without solutions',
+                        'End with a timed mini-test',
+                    ],
+                    commonMistakes: [
+                        'Memorizing steps without understanding assumptions',
+                        'Skipping unit-wise formula revision',
+                        'Not practicing mixed-difficulty questions',
+                    ],
+                },
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Chapter guidance generated',
+            data: {
+                overview: parsed.overview || '',
+                mustKnowTopics: Array.isArray(parsed.mustKnowTopics) ? parsed.mustKnowTopics : [],
+                practicePlan: Array.isArray(parsed.practicePlan) ? parsed.practicePlan : [],
+                commonMistakes: Array.isArray(parsed.commonMistakes) ? parsed.commonMistakes : [],
+            },
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const answerQuestion = async (req, res, next) => {
+    try {
+        const { question, subject, difficulty } = req.body;
+
+        if (!question || !String(question).trim()) {
+            throw toError('question is required', 400);
+        }
+
+        const ai = getAiClient();
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: getQuestionAnswerPrompt({ subject, question, difficulty }),
+        });
+
+        const parsed = parseGeminiResponse(response.text || '');
+
+        if (!parsed) {
+            return res.status(200).json({
+                success: true,
+                message: 'Answer generated',
+                data: {
+                    answer: 'Could not parse structured output, but your question is valid. Try rephrasing for a targeted explanation.',
+                    keyPoints: [
+                        'Identify what exactly is being asked',
+                        'List known values and assumptions',
+                        'Apply the relevant concept step by step',
+                    ],
+                    quickRevision: 'Focus on concept basics first, then solve one example and one variation.',
+                },
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Answer generated',
+            data: {
+                answer: parsed.answer || '',
+                keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
+                quickRevision: parsed.quickRevision || '',
+            },
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const getUserPlans = async (req, res, next) => {
+    try {
+        const plans = await StudyPlan.find({ userId: req.user.id })
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: plans.length,
+            plans: plans.map(getPlanPayloadFromDoc),
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const getPlanDetails = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        const plan = await StudyPlan.findOne({ _id: id, userId: req.user.id });
+
+        if (!plan) {
+            throw toError('Study plan not found', 404);
+        }
+
+        res.status(200).json({
+            success: true,
+            plan: getPlanPayloadFromDoc(plan),
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const updatePlanStatus = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!['active', 'completed', 'archived'].includes(status)) {
+            throw toError('Invalid status. Allowed: active, completed, archived', 400);
+        }
+
+        const updatedPlan = await StudyPlan.findOneAndUpdate(
+            { _id: id, userId: req.user.id },
+            { status, updatedAt: new Date() },
+            { new: true }
+        );
+
+        if (!updatedPlan) {
+            throw toError('Study plan not found', 404);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Study plan status updated',
+            plan: getPlanPayloadFromDoc(updatedPlan),
+        });
+    } catch (err) {
+        next(err);
     }
 };

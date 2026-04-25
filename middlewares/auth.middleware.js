@@ -42,3 +42,31 @@ export const authMiddleware = async (req, res, next) => {
         });
     }
 }
+
+export const optionalAuthMiddleware = async (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return next();
+        }
+
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, getJwtSecret());
+        const user = await User.findById(decoded.id);
+
+        if (user) {
+            req.user = {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+            };
+        }
+
+        return next();
+    } catch (err) {
+        // Optional auth should never block request flow.
+        return next();
+    }
+};

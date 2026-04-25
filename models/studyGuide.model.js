@@ -5,6 +5,17 @@ const StudyPlanSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+    branch: {
+        type: String,
+        default: '',
+        trim: true,
+    },
+    semester: {
+        type: Number,
+        min: 1,
+        max: 8,
+        default: null,
+    },
     learningGoal: {
         type: String,
         enum: [
@@ -50,6 +61,23 @@ const StudyPlanSchema = new mongoose.Schema({
     tips: {
         type: [String],
         required: true,
+    },
+    videoPlan: {
+        type: [String],
+        default: [],
+    },
+    youtubePlaylist: {
+        type: String,
+        default: '',
+        trim: true,
+    },
+    syllabusFileName: {
+        type: String,
+        default: null,
+    },
+    notesFileName: {
+        type: String,
+        default: null,
     },
     // User association (optional)
     userId: {
