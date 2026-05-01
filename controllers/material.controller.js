@@ -38,7 +38,7 @@ const validateMaterialPayload = ({ title, branch, semester, subject, category, t
         throw toError('Invalid category', 400);
     }
 
-    const normalizedType = String(type).toUpperCase();
+    const normalizedType = String(type);
     if (!TYPES.has(normalizedType)) {
         throw toError('Invalid type. Allowed: PDF or Link', 400);
     }
