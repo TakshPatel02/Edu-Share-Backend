@@ -138,9 +138,49 @@ export const createMaterial = async (req, res, next) => {
             type,
         });
 
+        const files = req.files || [];
+
+        // Multiple PDF files uploaded
+        if (normalizedType === 'PDF' && files.length > 0) {
+            const materials = await Promise.all(
+                files.map(async (file) => {
+                    const { fileId, resolvedUrl } = await resolveFileInfo({
+                        type: normalizedType,
+                        file,
+                        fileUrl: null,
+                    });
+
+                    return Material.create({
+                        title: files.length > 1 ? `${title} - ${file.originalname}` : title,
+                        description,
+                        branch,
+                        semester: semesterNum,
+                        subject,
+                        category,
+                        type: normalizedType,
+                        fileUrl: resolvedUrl,
+                        fileId,
+                        uploadedBy: req.user.id,
+                        status: 'pending',
+                    });
+                }),
+            );
+
+            return res.status(201).json({
+                success: true,
+                message: `${materials.length} material(s) uploaded successfully and sent for approval`,
+                materials: materials.map(withPdfViewUrl),
+            });
+        }
+
+        // Single link upload (no files)
+        if (normalizedType === 'PDF') {
+            throw toError('PDF file is required when type is PDF. Make sure the form field name is "file".', 400);
+        }
+
         const { fileId, resolvedUrl } = await resolveFileInfo({
             type: normalizedType,
-            file: req.file,
+            file: null,
             fileUrl,
         });
 
