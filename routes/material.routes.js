@@ -6,6 +6,6 @@ import { uploadPdf } from '../middlewares/upload.middleware.js';
 const router = express.Router();
 
 router.get('/', getMaterials);
-router.post('/', authMiddleware, uploadPdf.single('file'), createMaterial);
+router.post('/', authMiddleware, uploadPdf.array('file', 5), createMaterial);
 
 export default router;
