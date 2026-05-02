@@ -101,9 +101,8 @@ const StudyPlanSchema = new mongoose.Schema({
 });
 
 // Update updatedAt on save
-StudyPlanSchema.pre('save', function (next) {
+StudyPlanSchema.pre('save', function () {
     this.updatedAt = Date.now();
-    next();
 });
 
 export const StudyPlan = mongoose.model('StudyPlan', StudyPlanSchema);

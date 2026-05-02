@@ -60,6 +60,9 @@ const parseSyllabusPdfText = async (file) => {
     try {
         const textResult = await parser.getText();
         return (textResult?.text || '').trim();
+    } catch (error) {
+        console.warn('PDF text extraction failed:', error.message);
+        return '';
     } finally {
         await parser.destroy();
     }
