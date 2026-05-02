@@ -167,15 +167,16 @@ const serializeStudyPlan = (planDoc) => {
 export const dashboard = async (req, res, next) => {
     try {
         const userId = req.user.id;
-        const materialFilter = { uploadedBy: userId, category: 'books' };
+        const materialFilter = { uploadedBy: userId };
 
-        const [totalBooks, approvedBooks, rejectedBooks, pendingBooks, plans] =
+        const [totalBooks, approvedBooks, rejectedBooks, pendingBooks, plans, allMaterials] =
             await Promise.all([
                 Material.countDocuments(materialFilter),
                 Material.countDocuments({ ...materialFilter, status: 'approved' }),
                 Material.countDocuments({ ...materialFilter, status: 'rejected' }),
                 Material.countDocuments({ ...materialFilter, status: 'pending' }),
                 StudyPlan.find({ userId }).sort({ createdAt: -1 }),
+                Material.find({ uploadedBy: userId }).sort({ createdAt: -1 }),
             ]);
 
         res.status(200).json({
@@ -197,6 +198,15 @@ export const dashboard = async (req, res, next) => {
                     count: plans.length,
                     plans: plans.map(serializeStudyPlan),
                 },
+                documents: allMaterials.map(mat => ({
+                    id: mat._id,
+                    title: mat.title,
+                    subject: mat.subject,
+                    status: mat.status,
+                    type: mat.type,
+                    category: mat.category,
+                    createdAt: mat.createdAt
+                })),
             },
         });
     } catch (err) {
